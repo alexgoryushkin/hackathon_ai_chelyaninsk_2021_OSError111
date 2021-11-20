@@ -1,6 +1,34 @@
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import inspect
+from sqlalchemy.ext.compiler import compiles
+from sqlalchemy.sql import Insert
 
 db = SQLAlchemy()
+
+
+def universal_sqla_stringify(self):
+    pks = [f"{column.name}={getattr(self, column.name)}" for column in
+           list(filter(lambda column: column.primary_key, inspect(self.__class__).columns))]
+    return f"{self.__class__.__name__}({', '.join(pks)})"
+
+
+def universal_sqla_repr(self):
+    return self.__str__()
+
+
+db.Model.__str__ = universal_sqla_stringify
+db.Model.__repr__ = universal_sqla_repr
+
+
+@compiles(Insert, "postgresql")
+def postgresql_on_conflict_do_nothing(insert, compiler, **kw):
+    """ Обработчик на все insert, отменяет ошибку duplicate key. """
+    statement = compiler.visit_insert(insert, **kw)
+    returning_position = statement.find("RETURNING")
+    if returning_position >= 0:
+        return statement[:returning_position] + "ON CONFLICT DO NOTHING " + statement[returning_position:]
+    else:
+        return statement + " ON CONFLICT DO NOTHING"
 
 
 class Category(db.Model):
@@ -27,7 +55,25 @@ class Task(db.Model):
     status = db.Column(db.String(64))
 
     def to_json(self):
-        return {'id': self.id, 'time': self.time, 'status': self.status}
+        sub_tasks = db.session.query(SubTask).filter(SubTask.task_id == self.id).all()
+        is_valid_count = 0
+        in_valid_count = 0
+        not_detected = 0
+        for st in sub_tasks:
+            if st.is_valid is True:
+                is_valid_count += 1
+            elif st.is_valid is False:
+                in_valid_count += 1
+            else:
+                not_detected += 1
+        return {
+            'id': self.id,
+            'time': self.time.strftime('%d.%m.%Y %H:%M:%S'),
+            'status': self.status,
+            'isValidCount': is_valid_count,
+            'inValidCount': in_valid_count,
+            'notDetected': not_detected
+        }
 
 
 class ProductHasCategory(db.Model):

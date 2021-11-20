@@ -9,7 +9,7 @@ def neuron_oracle(name, user_codes) -> Tuple[List[Category], bool]:
     for cat in categories:
         if cat.name == name:
             is_valid = True
-    return categories, is_valid
 
-# def neuron_oracle(name:str) -> List[str]
-#     где name имя товара, а возвращаемое значение список кодов
+    if not user_codes:
+        is_valid = None
+    return categories, is_valid
