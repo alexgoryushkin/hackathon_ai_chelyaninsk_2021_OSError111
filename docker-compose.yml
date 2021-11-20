@@ -6,7 +6,9 @@ services:
       - "80:5000"
     volumes:
       - ./checker:/checker
-      - ./uploads:/checker/uploads
+      - ./uploads:/uploads
+      - ./front/static:/checker/static
+      - ./front/templates:/checker/templates
     env_file:
       - env
     restart: always

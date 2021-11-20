@@ -125,3 +125,5 @@ nohup.out
 *.md
 
 database_data/
+uploads/
+front/

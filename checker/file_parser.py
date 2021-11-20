@@ -1,4 +1,5 @@
 import string
+from datetime import datetime
 from multiprocessing.pool import ThreadPool
 
 from openpyxl import load_workbook
@@ -39,6 +40,7 @@ def handle_product(db, task_id, name: str, cat_codes: str):
 
 def file_to_farsh(db, filename, file_ext, task):
     if file_ext == 'xlsx':
+        start_time = datetime.now()
         xlsx = load_workbook(filename)
         tab = xlsx.worksheets[0]
         product_name_column = None
@@ -73,9 +75,9 @@ def file_to_farsh(db, filename, file_ext, task):
             else:
                 print('doc end')
                 break
-
         pool.close()
         pool.join()
+        print(f"Thread handle {i-1} products for {datetime.now() - start_time}")
         task.status = 'done'
         db.session.commit()
         db.session.flush()

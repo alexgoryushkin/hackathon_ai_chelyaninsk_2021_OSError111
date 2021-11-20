@@ -99,6 +99,7 @@ class SubTask(db.Model):
         return {
             'id': self.id,
             'isValid': self.is_valid,
+            'productName': self.product.name,
             'defaultCategories': [cat.to_json() for cat in our_cats],
             'userCategories': [cat.to_json() for cat in user_cats]
         }

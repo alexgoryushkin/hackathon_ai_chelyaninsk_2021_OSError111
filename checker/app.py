@@ -2,7 +2,7 @@ import os
 import threading
 from typing import Tuple, List
 
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 
@@ -14,7 +14,7 @@ app = Flask(__name__)
 print('cors disabled')
 CORS(app)
 
-app.config['UPLOAD_FOLDER'] = 'uploads'
+app.config['UPLOAD_FOLDER'] = '/uploads'
 # app.config['SQLALCHEMY_ECHO'] = True
 app.config['SQLALCHEMY_DATABASE_URI'] = f"postgresql://{os.environ['POSTGRES_USER']}:" \
                                         f"{os.environ['POSTGRES_PASSWORD']}@" \
@@ -23,19 +23,19 @@ app.config['SQLALCHEMY_DATABASE_URI'] = f"postgresql://{os.environ['POSTGRES_USE
 db.app = app
 db.init_app(app)
 
-# TODO: Скачивание xlsx
+print('default_datasets', os.listdir('/default_datasets'))
 
 # db.drop_all()
-# db.create_all()
-#
-# extract_categories_from_file(
-#     db,
-#     r'uploads/Реестр деклараций ПОСУДА ЕП РФ без 4000-8500.xlsx'
-# )
-# extract_categories_from_file(
-#     db,
-#     r'uploads/Реестр 327 тыс. деклараций ЕП РФ без 140000-200000.xlsx'
-# )
+db.create_all()
+if not db.session.query(Category).first():
+    extract_categories_from_file(
+        db,
+        r'/default_datasets/Реестр деклараций ПОСУДА ЕП РФ без 4000-8500.xlsx'
+    )
+    extract_categories_from_file(
+        db,
+        r'/default_datasets/Реестр 327 тыс. деклараций ЕП РФ без 140000-200000.xlsx'
+    )
 
 
 @app.route('/api/express', methods=['POST'])
@@ -118,3 +118,8 @@ def get_tasks(task_id):
 
 
 print('app ok')
+
+@app.route("/", defaults={'_': ''})
+@app.route("/<path:_>")
+def main_route(_):
+    return render_template("index.html")
