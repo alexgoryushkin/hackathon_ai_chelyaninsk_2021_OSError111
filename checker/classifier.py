@@ -114,11 +114,11 @@ def predict(description : str, threshold = 0.6):
     probas = out_df["proba"][0]
     result = []
     for i in range(len(cats)):
-        if probas[i]<threshold:
-            continue
+        # if probas[i]<threshold:
+        #     continue
         result.append((cats[i], probas[i]))
     result = sorted(result, key=itemgetter(1), reverse=True)
     result = [x for x, y in result]
-    return result
+    return result[0] if result else []
 
 

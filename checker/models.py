@@ -1,9 +1,18 @@
-from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import inspect
+# coding: utf-8
+import os
+import warnings
+from contextlib import contextmanager
+
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, text, inspect
+from sqlalchemy import create_engine
 from sqlalchemy.ext.compiler import compiles
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship
+from sqlalchemy.orm import scoped_session, sessionmaker
 from sqlalchemy.sql import Insert
 
-db = SQLAlchemy()
+Base = declarative_base()
+metadata = Base.metadata
 
 
 def universal_sqla_stringify(self):
@@ -16,8 +25,8 @@ def universal_sqla_repr(self):
     return self.__str__()
 
 
-db.Model.__str__ = universal_sqla_stringify
-db.Model.__repr__ = universal_sqla_repr
+Base.__str__ = universal_sqla_stringify
+Base.__repr__ = universal_sqla_repr
 
 
 @compiles(Insert, "postgresql")
@@ -31,31 +40,34 @@ def postgresql_on_conflict_do_nothing(insert, compiler, **kw):
         return statement + " ON CONFLICT DO NOTHING"
 
 
-class Category(db.Model):
-    code = db.Column(db.String(10), primary_key=True, unique=True)
-    name = db.Column(db.String(4096))
-    parent_code = db.Column(db.ForeignKey('category.code', ondelete='CASCADE', onupdate='CASCADE'))
+class Category(Base):
+    __tablename__ = 'category'
+    code = Column(String(10), primary_key=True, unique=True)
+    name = Column(String(4096))
+    parent_code = Column(ForeignKey('category.code', ondelete='CASCADE', onupdate='CASCADE'))
 
-    parent = db.relationship('Category', remote_side=[code])
-    sub_tasks = db.relationship('SubTask', secondary='sub_task_has_category')
-    products = db.relationship('Product', secondary='product_has_category')
+    parent = relationship('Category', remote_side=[code])
+    sub_tasks = relationship('SubTask', secondary='sub_task_has_category')
+    products = relationship('Product', secondary='product_has_category')
 
     def to_json(self):
         return {'code': self.code, 'name': self.name}
 
 
-class Product(db.Model):
-    id = db.Column(db.Integer, primary_key=True, unique=True)
-    name = db.Column(db.String(8196))
+class Product(Base):
+    __tablename__ = 'product'
+    id = Column(Integer, primary_key=True, unique=True)
+    name = Column(String(8196))
 
 
-class Task(db.Model):
-    id = db.Column(db.Integer, primary_key=True, unique=True)
-    time = db.Column(db.DateTime, server_default=db.text("CURRENT_TIMESTAMP"))
-    status = db.Column(db.String(64))
+class Task(Base):
+    __tablename__ = 'task'
+    id = Column(Integer, primary_key=True, unique=True)
+    time = Column(DateTime, server_default=text("CURRENT_TIMESTAMP"))
+    status = Column(String(64))
 
-    def to_json(self):
-        sub_tasks = db.session.query(SubTask).filter(SubTask.task_id == self.id).all()
+    def to_json(self, session):
+        sub_tasks = session.query(SubTask).filter(SubTask.task_id == self.id).all()
         is_valid_count = 0
         in_valid_count = 0
         not_detected = 0
@@ -76,25 +88,27 @@ class Task(db.Model):
         }
 
 
-class ProductHasCategory(db.Model):
-    product_id = db.Column('product_id', db.ForeignKey('product.id'), primary_key=True, nullable=False)
-    category_code = db.Column('category_code', db.ForeignKey('category.code'), primary_key=True, nullable=False)
+class ProductHasCategory(Base):
+    __tablename__ = 'product_has_category'
+    product_id = Column('product_id', ForeignKey('product.id'), primary_key=True, nullable=False)
+    category_code = Column('category_code', ForeignKey('category.code'), primary_key=True, nullable=False)
 
 
-class SubTask(db.Model):
-    id = db.Column(db.Integer, primary_key=True, unique=True)
-    task_id = db.Column(db.ForeignKey('task.id'))
-    product_id = db.Column(db.ForeignKey('product.id'))
-    is_valid = db.Column(db.Boolean)
+class SubTask(Base):
+    __tablename__ = 'sub_task'
+    id = Column(Integer, primary_key=True, unique=True)
+    task_id = Column(ForeignKey('task.id'))
+    product_id = Column(ForeignKey('product.id'))
+    is_valid = Column(Boolean)
 
-    product = db.relationship('Product')
-    task = db.relationship('Task')
+    product = relationship('Product')
+    task = relationship('Task')
 
-    def to_json(self):
+    def to_json(self, session):
         self.product: Product
-        our_cats = db.session.query(Category).outerjoin(ProductHasCategory).filter(
+        our_cats = session.query(Category).outerjoin(ProductHasCategory).filter(
             ProductHasCategory.product_id == self.product_id).all()
-        user_cats = db.session.query(Category).outerjoin(SubTaskHasCategory).filter(
+        user_cats = session.query(Category).outerjoin(SubTaskHasCategory).filter(
             SubTaskHasCategory.sub_task_id == self.product_id).all()
         return {
             'id': self.id,
@@ -105,6 +119,30 @@ class SubTask(db.Model):
         }
 
 
-class SubTaskHasCategory(db.Model):
-    sub_task_id = db.Column('sub_task_id', db.ForeignKey('sub_task.id'), primary_key=True, nullable=False)
-    category_code = db.Column('category_code', db.ForeignKey('category.code'), primary_key=True, nullable=False)
+class SubTaskHasCategory(Base):
+    __tablename__ = 'sub_task_has_category'
+    sub_task_id = Column('sub_task_id', ForeignKey('sub_task.id'), primary_key=True, nullable=False)
+    category_code = Column('category_code', ForeignKey('category.code'), primary_key=True, nullable=False)
+
+
+engine = create_engine(
+    f"postgresql://{os.environ['POSTGRES_USER']}:{os.environ['POSTGRES_PASSWORD']}@postgres.service:5432/"
+    f"{os.environ['POSTGRES_DB']}", pool_pre_ping=True, pool_size=32, max_overflow=64
+)
+db_session = scoped_session(
+    sessionmaker(autocommit=False, autoflush=False, bind=engine)
+)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+
+@contextmanager
+def SessionManager():
+    db = SessionLocal()
+    try:
+        yield db
+    except:
+        warnings.warn("auto-rollbacking")
+        db.rollback()
+        raise
+    finally:
+        db.close()
