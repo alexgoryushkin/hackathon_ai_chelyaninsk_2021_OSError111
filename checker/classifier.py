@@ -110,7 +110,7 @@ def predict(description : str, threshold = 0.6):
     preds_multi_labels = preds_multi.argpartition(-3, axis=1)[:,-3:]
     preds_multi_proba = [preds_multi[i][preds_multi_labels[i]] for i in range(len(preds_multi))]
     out_df = pd.DataFrame(data=[[description], [mlb.classes_[i] for i in preds_multi_labels], preds_multi_proba], index=['name', 'cat', 'proba']).T
-    cats = out_df["cat"][0][::-1]
+    cats = out_df["cat"][0]
     probas = out_df["proba"][0]
     result = []
     for i in range(len(cats)):

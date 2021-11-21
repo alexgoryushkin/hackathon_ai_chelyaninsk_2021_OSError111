@@ -73,14 +73,14 @@ def file_to_farsh(filename, file_ext, task_id):
                 name = tab[f'{product_name_column}{i}'].value
                 cat_codes = tab[f'{product_code_column}{i}'].value
                 if name:
-                    handle_product(task_id, name.strip(), cat_codes.strip())
-                    # pool.apply_async(handle_product, (session, task.id, name.strip(), cat_codes.strip()))
+                    # handle_product(task_id, name.strip(), cat_codes.strip())
+                    pool.apply_async(handle_product, (task_id, name.strip(), cat_codes.strip()))
                     i += 1
                 else:
                     print('doc end')
                     break
-            # pool.close()
-            # pool.join()
+            pool.close()
+            pool.join()
             print(f"Thread handle {i - 1} products for {datetime.now() - start_time}")
             session.query(Task).filter(Task.id == task_id). \
                 update({'status': 'done'}, synchronize_session="fetch")

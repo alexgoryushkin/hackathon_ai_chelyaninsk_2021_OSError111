@@ -16,6 +16,9 @@ def neuron_oracle(session, name, user_codes) -> Tuple[List[Category], Optional[b
     if not user_codes:
         return categories, None
 
+    if len(our_cats) != len(user_codes):
+        return categories, False
+
     is_valid = False
     for cat in user_codes:
         if cat in our_cats:
