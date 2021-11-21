@@ -1,11 +1,14 @@
 import os
 import threading
+from datetime import datetime
 from typing import Tuple, List
 
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
+from sqlalchemy import func
 from werkzeug.utils import secure_filename
 
+import classifier
 from name_checker import neuron_oracle
 from models import db, Category, Task, SubTask
 from file_parser import file_to_farsh, extract_categories_from_file
@@ -24,10 +27,11 @@ db.app = app
 db.init_app(app)
 
 print('default_datasets', os.listdir('/default_datasets'))
-
+classifier.init('/default_datasets/goods_fixed.csv')
 # db.drop_all()
 db.create_all()
 if not db.session.query(Category).first():
+    start_time = datetime.now()
     extract_categories_from_file(
         db,
         r'/default_datasets/Реестр деклараций ПОСУДА ЕП РФ без 4000-8500.xlsx'
@@ -36,7 +40,7 @@ if not db.session.query(Category).first():
         db,
         r'/default_datasets/Реестр 327 тыс. деклараций ЕП РФ без 140000-200000.xlsx'
     )
-
+    print(f"Load categories to database for {datetime.now() - start_time}")
 
 @app.route('/api/express', methods=['POST'])
 def express():
@@ -103,9 +107,14 @@ def get_tasks(task_id):
         }), 200
 
     if task_id:
-        query = db.session.query(SubTask).filter(SubTask.task_id == task_id)
+        count_tasks = None
+        if 'isValid' in request.args:
+            query = db.session.query(SubTask).filter(SubTask.task_id == task_id, SubTask.is_valid==request.args['isValid'] )
+        else:
+            query = db.session.query(SubTask).filter(SubTask.task_id == task_id)
     else:
-        query = db.session.query(Task)
+        count_tasks = db.session.query(func.count(Task.id)).scalar()
+        query = db.session.query(Task).order_by(Task.id)
 
     if 'take' in request.args:
         query = query.limit(request.args['take'])
@@ -113,6 +122,7 @@ def get_tasks(task_id):
         query = query.offset(request.args['skip'])
 
     return jsonify({
+        'count': count_tasks,
         'subTasks' if task_id else 'tasks': [task.to_json() for task in query.all()]
     }), 200
 

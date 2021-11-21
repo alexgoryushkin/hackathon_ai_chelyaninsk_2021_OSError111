@@ -2,9 +2,10 @@ import string
 from datetime import datetime
 from multiprocessing.pool import ThreadPool
 
+from flask_sqlalchemy import SQLAlchemy
 from openpyxl import load_workbook
 
-from models import SubTask, Product, SubTaskHasCategory, Category, ProductHasCategory
+from models import SubTask, Product, SubTaskHasCategory, Category, ProductHasCategory, Task
 from name_checker import neuron_oracle
 
 product_name_column_name = 'Общее наименование продукции'
@@ -38,7 +39,7 @@ def handle_product(db, task_id, name: str, cat_codes: str):
     db.session.flush()
 
 
-def file_to_farsh(db, filename, file_ext, task):
+def file_to_farsh(db:SQLAlchemy, filename, file_ext, task):
     if file_ext == 'xlsx':
         start_time = datetime.now()
         xlsx = load_workbook(filename)
@@ -61,24 +62,25 @@ def file_to_farsh(db, filename, file_ext, task):
         if not product_name_column or not product_code_column:
             raise RuntimeError(f'product_name_column={product_name_column} product_code_column={product_code_column}')
 
-        db.session.add(task)
-        db.session.commit()
         pool = ThreadPool(processes=16)
+        # session = db.create_scoped_session()
 
         i = 2
         while True:
             name = tab[f'{product_name_column}{i}'].value
             cat_codes = tab[f'{product_code_column}{i}'].value
             if name:
-                pool.apply_async(handle_product, (db, task.id, name.strip(), cat_codes.strip()))
+                handle_product(db, task.id, name.strip(), cat_codes.strip())
+                # pool.apply_async(handle_product, (session, task.id, name.strip(), cat_codes.strip()))
                 i += 1
             else:
                 print('doc end')
                 break
-        pool.close()
-        pool.join()
+        # pool.close()
+        # pool.join()
         print(f"Thread handle {i-1} products for {datetime.now() - start_time}")
-        task.status = 'done'
+        db.session.query(Task).filter(Task.id == task.id). \
+            update({'status': 'done'}, synchronize_session="fetch")
         db.session.commit()
         db.session.flush()
     else:
@@ -127,9 +129,7 @@ def extract_categories_from_file(db, filename):
             if category_name_column and category_code_column:
                 cat_name = tab[f'{category_name_column}{i}'].value
                 cat_code = tab[f'{category_code_column}{i}'].value
-                print(i, 1, cat_code, normalize_str(cat_name))
                 if cat_name:
-                    print(i, 2, cat_code, normalize_str(cat_name))
                     categories.append(Category(code=cat_code, name=normalize_str(cat_name)))
                     i += 1
                 else:
