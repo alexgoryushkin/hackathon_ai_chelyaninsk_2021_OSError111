@@ -5,9 +5,9 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 RUN apt-get install --no-install-recommends -y wget unzip
 
-#WORKDIR /default_datasets
-#RUN wget --no-verbose -O datasets.zip https://storage.yandexcloud.net/hackai-datasetrsv/profsa.zip && \
-#    unzip -qq datasets.zip && rm datasets.zip
+WORKDIR /default_datasets
+RUN wget --no-verbose -O datasets.zip https://storage.yandexcloud.net/hackai-datasetrsv/profsa.zip && \
+    unzip -qq datasets.zip && rm datasets.zip
 
 WORKDIR /default_datasets
 COPY fixed_datasets.zip .
